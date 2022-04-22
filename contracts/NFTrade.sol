@@ -60,7 +60,13 @@ contract NFTrade {
         if (_tokenContracts[i] == _tokenContracts[j] && _tokenIds[i] == _tokenIds[j])
           revert("Duplicate tokens.");
       }
-      _participants[i] = (i < _recipientIndex) ? msg.sender : _recipient;
+      IERC721 tokenContract = IERC721(_tokenContracts[i]);
+      address owner = (i < _recipientIndex) ? msg.sender : _recipient;
+      require(
+        tokenContract.ownerOf(_tokenIds[i]) == owner, 
+        "Invalid token owner."
+      );
+      _participants[i] = owner;
     }
     participants.push(_participants);
     tokenContracts.push(_tokenContracts);
@@ -73,11 +79,17 @@ contract NFTrade {
    */
   function executeSwap(uint _id) onlySwapRecipient(_id) public {
     address[] memory swapParticipants = participants[_id];
-    for (uint i = 0; i < participants[_id].length; i++) {
-      IERC721 tokenContract = IERC721(tokenContracts[_id][i]);
+    address[] memory swapContractAddresses = tokenContracts[_id];
+    for (uint i = 0; i < swapContractAddresses.length; i++) {
+      IERC721 tokenContract = IERC721(swapContractAddresses[i]);
+      bool tokenApproved = tokenContract.isApprovedForAll(swapParticipants[i], address(this)) 
+        || tokenContract.getApproved(tokenIds[_id][i]) == address(this);
+      require(tokenApproved, "Token not approved.");
+    }
+    for (uint i = 0; i < swapParticipants.length; i++) {
+      IERC721 tokenContract = IERC721(swapContractAddresses[i]);
       address to = swapParticipants[(swapParticipants[i] == msg.sender) ? 0 : swapParticipants.length - 1]; 
       tokenContract.safeTransferFrom(swapParticipants[i], to, tokenIds[_id][i]);
     }
   }
 }
-
