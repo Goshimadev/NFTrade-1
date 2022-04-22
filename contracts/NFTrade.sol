@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.22 <0.9.0;
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract NFTrade {
   address[][] public participants; // participants[tradeId] == array of each owner participating in a trade
@@ -12,6 +13,15 @@ contract NFTrade {
    *  @param _recipient Recipient of swap. 
    */
   event SwapCreated(uint _id, address indexed _creator, address indexed _recipient);
+
+  /** @dev Requires that caller is the recipient of a certain swap.
+   *  @param _id ID of the swap.
+   */
+  modifier onlySwapRecipient(uint _id) {
+    address[] memory arr = participants[_id];
+    require(arr[arr.length - 1] == msg.sender, "Caller must be swap recipient.");
+    _;
+  }
 
   /** @dev Creates a swap for a recipient to approve.
    *  @param _recipient Recipient of the swap.
@@ -45,7 +55,7 @@ contract NFTrade {
       "Invalid recipient index."
     );
     address[] memory _participants = new address[](_tokenContracts.length);
-    for(uint i = 0; i < _tokenContracts.length; i++) {
+    for (uint i = 0; i < _tokenContracts.length; i++) {
       for (uint j = 0; j < i; j++) {
         if (_tokenContracts[i] == _tokenContracts[j] && _tokenIds[i] == _tokenIds[j])
           revert("Duplicate tokens.");
@@ -57,4 +67,17 @@ contract NFTrade {
     tokenIds.push(_tokenIds);
     emit SwapCreated(id, msg.sender, _recipient);
   }
+
+  /** @dev Executes a swap. Called by the recipient.
+   *  @param _id ID of the swap.
+   */
+  function executeSwap(uint _id) onlySwapRecipient(_id) public {
+    address[] memory swapParticipants = participants[_id];
+    for (uint i = 0; i < participants[_id].length; i++) {
+      IERC721 tokenContract = IERC721(tokenContracts[_id][i]);
+      address to = swapParticipants[(swapParticipants[i] == msg.sender) ? 0 : swapParticipants.length - 1]; 
+      tokenContract.safeTransferFrom(swapParticipants[i], to, tokenIds[_id][i]);
+    }
+  }
 }
+
