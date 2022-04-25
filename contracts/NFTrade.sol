@@ -111,10 +111,16 @@ contract NFTrade {
     _invalidateSwap(_id);
   }
 
+  /** @dev Called by creator of swap to unapprove it for execution.
+   *  @param _id ID of the swap.
+   */
   function unapproveSwap(uint _id) onlySwapCreator(_id) public {
     _invalidateSwap(_id);
   }
 
+  /** @dev Invalidates a swap from future execution.
+   *  @param _id ID of the swap.
+   */
   function _invalidateSwap(uint _id) private {
     expirations[_id] = block.timestamp;
   }
