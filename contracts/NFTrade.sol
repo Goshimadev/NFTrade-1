@@ -5,7 +5,8 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 contract NFTrade {
   address[][] public participants; // participants[tradeId] == array of each owner participating in a trade
   address[][] public tokenContracts; // tokenContracts[tradeId] == array of each NFT involved in a trade
-  uint[][] public tokenIds; // tokenContracts[tradeId] == array of token IDs involved in a trade
+  uint[][] public tokenIds; // tokenIds[tradeId] == array of token IDs involved in a trade
+  uint[] public expirations; // expirations[tradeId] == expiration time for swap (0 for no expiration)
 
   /** @dev Emitted when a swap is created.
    *  @param _id ID of swap.
@@ -13,6 +14,15 @@ contract NFTrade {
    *  @param _recipient Recipient of swap. 
    */
   event SwapCreated(uint _id, address indexed _creator, address indexed _recipient);
+
+  /** @dev Requires that caller is the creator of a certain swap.
+   *  @param _id ID of the swap.
+   */
+  modifier onlySwapCreator(uint _id) {
+    address[] memory arr = participants[_id];
+    require(arr[0] == msg.sender, "Caller must be swap creator.");
+    _;
+  }
 
   /** @dev Requires that caller is the recipient of a certain swap.
    *  @param _id ID of the swap.
@@ -36,12 +46,14 @@ contract NFTrade {
    *    The array begins with the IDs of the creator's tokens for trade
    *    and ends with the IDs of the recipient's tokens for trade, 
    *    with _recipientIndex indicating where they are separated.
+   *  @param _expiresIn Time in seconds until expiration. Pass 0 for no expiration.
    */
   function createSwap(
     address _recipient,
     uint _recipientIndex,
     address[] memory _tokenContracts, 
-    uint[] memory _tokenIds
+    uint[] memory _tokenIds,
+    uint _expiresIn
   ) public {
     uint id = participants.length;
     require(
@@ -71,6 +83,7 @@ contract NFTrade {
     participants.push(_participants);
     tokenContracts.push(_tokenContracts);
     tokenIds.push(_tokenIds);
+    expirations.push(_expiresIn == 0 ? 0 : block.timestamp + _expiresIn);
     emit SwapCreated(id, msg.sender, _recipient);
   }
 
@@ -78,6 +91,10 @@ contract NFTrade {
    *  @param _id ID of the swap.
    */
   function executeSwap(uint _id) onlySwapRecipient(_id) public {
+    require(
+      expirations[_id] == 0 || expirations[_id] >= block.timestamp,
+      "Swap has expired."
+    );
     address[] memory swapParticipants = participants[_id];
     address[] memory swapContractAddresses = tokenContracts[_id];
     for (uint i = 0; i < swapContractAddresses.length; i++) {
@@ -91,5 +108,14 @@ contract NFTrade {
       address to = swapParticipants[(swapParticipants[i] == msg.sender) ? 0 : swapParticipants.length - 1]; 
       tokenContract.safeTransferFrom(swapParticipants[i], to, tokenIds[_id][i]);
     }
+    _invalidateSwap(_id);
+  }
+
+  function unapproveSwap(uint _id) onlySwapCreator(_id) public {
+    _invalidateSwap(_id);
+  }
+
+  function _invalidateSwap(uint _id) private {
+    expirations[_id] = block.timestamp;
   }
 }

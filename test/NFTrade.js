@@ -9,10 +9,10 @@ contract("NFTrade", function (accounts) {
     instance = await NFTrade.deployed();
   });
   it("reverts if address provided is not ERC-721", async function () {
-    await expectRevert.unspecified(instance.createSwap(accounts[1], 1, [accounts[2], accounts[2]], [1, 2]));
+    await expectRevert.unspecified(instance.createSwap(accounts[1], 1, [accounts[2], accounts[2]], [1, 2], 0));
   });
   it("emits SwapCreated event", async function () {
-    const tx = await instance.createSwap(accounts[1], 1, [nft.address, nft.address], [1, 2]);
+    const tx = await instance.createSwap(accounts[1], 1, [nft.address, nft.address], [1, 2], 0);
     await expectEvent(tx, "SwapCreated", { _id: "0", _creator: accounts[0], _recipient: accounts[1] });
   });
   it("creates valid participants array", async function () {
